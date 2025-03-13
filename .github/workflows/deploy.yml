@@ -3,41 +3,42 @@ name: Deploy Flask App to Google Cloud Run
 on:
   push:
     branches:
-      - main  # Nebo jiná větev, podle potřeby
+      - main  # Spustí se při pushnutí do hlavní větve
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: europe-central4  # Zvol si region
-  SERVICE_NAME: naocicd  # Název služby
-  IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/naocicd
+  REGION: europe-west4  # ✅ Nastavený region
+  SERVICE_NAME: flask-app  # Název Cloud Run služby
+  REPO_NAME: cicd  # Název Artifact Registry repozitáře
+  IMAGE_NAME: europe-west4-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/cicd/flask-app
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repozitáře
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      # Nastavení Google Cloud autentizace
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Nastavení Google Cloud SDK
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
-      # Sestavení a pushnutí Docker image
+      - name: Configure Docker authentication
+        run: |
+          gcloud auth configure-docker europe-west4-docker.pkg.dev
+
       - name: Build and push Docker image
         run: |
-          gcloud auth configure-docker
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
-      # Deploy na Cloud Run
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy $SERVICE_NAME \
@@ -45,4 +46,4 @@ jobs:
             --platform managed \
             --region $REGION \
             --allow-unauthenticated \
-            --port 8080
+            --timeout=300s
